@@ -157,7 +157,12 @@ body::before {
 .result-body {
   padding: 16px; font-size: 13px; line-height: 1.8; color: #c8c8d8;
   white-space: pre-wrap; font-family: inherit; max-height: 500px;
-  overflow-y: auto; word-break: break-word;
+  overflow-y: auto; word-break: break-word; outline: none;
+  border: 2px solid transparent; transition: border-color 0.2s;
+}
+.result-body.editing {
+  border-color: rgba(212,96,58,0.4);
+  background: #1e1e2a;
 }
 
 /* Buttons */
@@ -218,6 +223,56 @@ body::before {
 .toggle.on { background: var(--secondary); }
 .toggle.on::after { transform: translateX(20px); }
 .toggle-label { font-size: 12px; font-weight: 600; color: var(--text-mid); }
+
+.settings-btn {
+  margin-top: 14px; padding: 7px 18px; border: 1px solid var(--border);
+  border-radius: 100px; background: var(--surface); font-family: inherit;
+  font-size: 12px; font-weight: 600; color: var(--text-dim);
+  cursor: pointer; transition: all 0.2s; box-shadow: var(--shadow-sm);
+}
+.settings-btn:hover { border-color: var(--primary); color: var(--primary); background: var(--primary-soft); }
+
+/* Context editor modal */
+.ctx-overlay {
+  display: none; position: fixed; inset: 0;
+  background: rgba(44,36,24,0.5); backdrop-filter: blur(4px);
+  z-index: 200; justify-content: center; align-items: flex-start;
+  padding: 32px 16px; overflow-y: auto;
+}
+.ctx-overlay.open { display: flex; }
+.ctx-modal {
+  background: var(--surface); border-radius: 18px;
+  width: 100%; max-width: 680px; box-shadow: var(--shadow-lg);
+  animation: modalIn 0.25s ease;
+}
+.ctx-modal-head {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 18px 22px; border-bottom: 1px solid var(--border-light);
+}
+.ctx-modal-head h3 { font-size: 16px; font-weight: 800; }
+.ctx-modal-close {
+  width: 32px; height: 32px; border: none; border-radius: 8px;
+  background: var(--bg-warm); font-size: 18px; cursor: pointer;
+  display: flex; align-items: center; justify-content: center;
+  color: var(--text-dim); font-family: inherit;
+}
+.ctx-modal-close:hover { background: var(--border); color: var(--text); }
+.ctx-modal-body { padding: 22px; }
+.ctx-textarea {
+  width: 100%; min-height: 350px; padding: 14px 16px;
+  border: 1.5px solid var(--border); border-radius: 12px;
+  font-family: 'Noto Sans KR', sans-serif; font-size: 13px;
+  line-height: 1.8; color: var(--text); background: var(--bg);
+  resize: vertical; outline: none; transition: border-color 0.15s;
+}
+.ctx-textarea:focus { border-color: var(--primary); background: white; }
+.ctx-hint { font-size: 11px; color: var(--text-dim); margin-top: 8px; line-height: 1.6; }
+.ctx-actions {
+  display: flex; gap: 8px; justify-content: space-between; align-items: center;
+  margin-top: 16px; padding-top: 14px; border-top: 1px solid var(--border-light);
+}
+.ctx-actions-left { display: flex; gap: 8px; }
+.ctx-actions-right { display: flex; gap: 8px; }
 </style>
 </head>
 <body>
@@ -228,6 +283,7 @@ body::before {
     <div class="header-brand"><div class="dot"></div>돌봄매트</div>
     <h1>AI <span>프롬프트</span> 생성기</h1>
     <div class="header-sub">작업 유형 선택 → 세부 내용 입력 → 최적화된 프롬프트 자동 생성<br>복사해서 Claude에 바로 붙여넣기!</div>
+    <button class="settings-btn" onclick="openContextEditor()">⚙️ 회사 정보 설정</button>
   </div>
 
   <!-- Steps -->
@@ -255,7 +311,7 @@ body::before {
 
       <div class="toggle-row">
         <button class="toggle on" id="contextToggle" onclick="this.classList.toggle('on')"></button>
-        <span class="toggle-label">회사 정보 자동 포함 (돌봄매트 배경 정보)</span>
+        <span class="toggle-label">회사 정보 자동 포함</span>
       </div>
 
       <div class="toggle-row">
@@ -277,6 +333,7 @@ body::before {
         <div class="result-header">
           <h3>생성된 프롬프트</h3>
           <div class="result-actions">
+            <button class="copy-btn" id="editToggleBtn" onclick="toggleEdit()">🔒 수정 잠금</button>
             <button class="copy-btn" onclick="copyResult()">📋 복사하기</button>
           </div>
         </div>
@@ -298,9 +355,35 @@ body::before {
 
 </div>
 
+<!-- Context Editor Modal -->
+<div class="ctx-overlay" id="ctxOverlay">
+  <div class="ctx-modal">
+    <div class="ctx-modal-head">
+      <h3>✏️ 회사 정보 수정</h3>
+      <button class="ctx-modal-close" onclick="closeContextEditor()">✕</button>
+    </div>
+    <div class="ctx-modal-body">
+      <textarea class="ctx-textarea" id="ctxEditor"></textarea>
+      <div class="ctx-hint">
+        💡 여기에 작성한 내용이 프롬프트 앞에 자동으로 붙습니다. 회사 정보, 제품 스펙, 경쟁사 현황 등을 자유롭게 수정하세요.<br>
+        수정 후 "저장"을 누르면 브라우저에 저장되어 다음에 접속해도 유지됩니다.
+      </div>
+      <div class="ctx-actions">
+        <div class="ctx-actions-left">
+          <button class="btn btn-ghost" style="flex:0; font-size:12px; padding:10px 16px;" onclick="resetContext()">🔄 기본값 복원</button>
+        </div>
+        <div class="ctx-actions-right">
+          <button class="btn btn-secondary" style="flex:0; padding:10px 20px;" onclick="closeContextEditor()">취소</button>
+          <button class="btn btn-primary" style="flex:0; padding:10px 20px;" onclick="saveContext()">저장</button>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
 <script>
 // ─── COMPANY CONTEXT ───
-var CONTEXT = `[역할 부여] 당신은 층간소음 시공매트 전문 기업 '돌봄매트'의 최고 전략 책임자(CSO)이자 마케팅 전문가입니다.
+var DEFAULT_CONTEXT = `[역할 부여] 당신은 층간소음 시공매트 전문 기업 '돌봄매트'의 최고 전략 책임자(CSO)이자 마케팅 전문가입니다.
 
 [회사 정보: 돌봄매트]
 - 산업: 영유아 및 반려동물 가구를 위한 층간소음 시공매트 전문 기업
@@ -317,6 +400,65 @@ var CONTEXT = `[역할 부여] 당신은 층간소음 시공매트 전문 기업
 - 마케팅: 맘카페 + 인스타그램 오가닉 중심, 유료 광고 최소화
 
 위 맥락을 바탕으로 아래 요청에 답변해 주세요.`;
+
+// Load saved context or use default
+function getContext() {
+  var saved = localStorage.getItem('dolbom_context');
+  return saved || DEFAULT_CONTEXT;
+}
+
+var CONTEXT = getContext();
+
+// Context editor functions
+function openContextEditor() {
+  document.getElementById('ctxEditor').value = CONTEXT;
+  document.getElementById('ctxOverlay').classList.add('open');
+}
+
+function closeContextEditor() {
+  document.getElementById('ctxOverlay').classList.remove('open');
+}
+
+function saveContext() {
+  var newContext = document.getElementById('ctxEditor').value.trim();
+  if (!newContext) { alert('내용을 입력해주세요.'); return; }
+  CONTEXT = newContext;
+  localStorage.setItem('dolbom_context', newContext);
+  closeContextEditor();
+  alert('회사 정보가 저장되었습니다!');
+}
+
+function resetContext() {
+  if (!confirm('기본값으로 복원하시겠습니까? 수정한 내용이 사라집니다.')) return;
+  document.getElementById('ctxEditor').value = DEFAULT_CONTEXT;
+}
+
+// Close context editor on overlay click
+document.getElementById('ctxOverlay').addEventListener('click', function(e) {
+  if (e.target === this) closeContextEditor();
+});
+
+// Toggle edit mode on result
+function toggleEdit() {
+  var body = document.getElementById('resultBody');
+  var btn = document.getElementById('editToggleBtn');
+  var isEditable = body.contentEditable === 'true';
+
+  if (isEditable) {
+    // Lock
+    body.contentEditable = 'false';
+    body.classList.remove('editing');
+    btn.textContent = '🔒 수정 잠금';
+  } else {
+    // Unlock
+    body.contentEditable = 'true';
+    body.classList.add('editing');
+    body.focus();
+    btn.textContent = '✏️ 수정 중';
+    btn.classList.add('copied');
+    setTimeout(function() { btn.classList.remove('copied'); }, 1000);
+  }
+}
 
 // ─── TASK DEFINITIONS ───
 var TASKS = [
@@ -615,7 +757,11 @@ function generate() {
     prompt += '\n한글로 답변해 주세요.';
   }
 
-  document.getElementById('resultBody').textContent = prompt.trim();
+  document.getElementById('resultBody').innerText = prompt.trim();
+  // Reset to locked mode
+  document.getElementById('resultBody').contentEditable = 'false';
+  document.getElementById('resultBody').classList.remove('editing');
+  document.getElementById('editToggleBtn').textContent = '🔒 수정 잠금';
   goStep(3);
 }
 
@@ -635,7 +781,7 @@ function goStep(n) {
 
 // ─── COPY ───
 function copyResult() {
-  var text = document.getElementById('resultBody').textContent;
+  var text = document.getElementById('resultBody').innerText;
   navigator.clipboard.writeText(text).then(function() {
     var btns = document.querySelectorAll('.copy-btn');
     btns.forEach(function(b) { b.textContent = '✓ 복사됨!'; b.classList.add('copied'); });
@@ -654,7 +800,7 @@ function saveTemplate() {
   templates.push({
     name: name,
     category: currentTask ? currentTask.name : '자유',
-    prompt: document.getElementById('resultBody').textContent,
+    prompt: document.getElementById('resultBody').innerText,
     created: Date.now()
   });
   localStorage.setItem('dolbom_templates', JSON.stringify(templates));
@@ -690,7 +836,10 @@ function loadTemplate(idx) {
   var templates = loadTemplates();
   var t = templates[idx];
   if (!t) return;
-  document.getElementById('resultBody').textContent = t.prompt;
+  document.getElementById('resultBody').innerText = t.prompt;
+  document.getElementById('resultBody').contentEditable = 'false';
+  document.getElementById('resultBody').classList.remove('editing');
+  document.getElementById('editToggleBtn').textContent = '🔒 수정 잠금';
   goStep(3);
 }
 
