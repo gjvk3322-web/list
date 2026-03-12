@@ -1,0 +1,708 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>돌봄매트 · 프롬프트 생성기</title>
+<link href="https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@400;500;600;700;800;900&display=swap" rel="stylesheet">
+<style>
+:root {
+  --bg: #f7f5f2;
+  --bg-warm: #f0ebe4;
+  --surface: #ffffff;
+  --border: #e4ded6;
+  --border-light: #eee9e2;
+  --text: #2c2418;
+  --text-mid: #6b5d4f;
+  --text-dim: #a09484;
+  --primary: #d4603a;
+  --primary-soft: rgba(212,96,58,0.08);
+  --primary-glow: rgba(212,96,58,0.15);
+  --secondary: #3a7d6e;
+  --secondary-soft: rgba(58,125,110,0.08);
+  --blue: #4a8db7;
+  --purple: #7b5ea7;
+  --shadow-sm: 0 1px 3px rgba(44,36,24,0.05);
+  --shadow-md: 0 4px 16px rgba(44,36,24,0.07);
+  --shadow-lg: 0 8px 32px rgba(44,36,24,0.1);
+  --radius: 14px;
+  --radius-sm: 10px;
+}
+
+* { margin:0; padding:0; box-sizing:border-box; }
+body {
+  font-family: 'Noto Sans KR', -apple-system, sans-serif;
+  background: var(--bg);
+  color: var(--text);
+  -webkit-font-smoothing: antialiased;
+  min-height: 100vh;
+}
+
+body::before {
+  content: '';
+  position: fixed; inset: 0;
+  background: radial-gradient(ellipse at 15% 0%, rgba(212,96,58,0.03) 0%, transparent 50%),
+              radial-gradient(ellipse at 85% 100%, rgba(58,125,110,0.03) 0%, transparent 50%);
+  pointer-events: none;
+}
+
+.app { position: relative; z-index: 1; max-width: 780px; margin: 0 auto; padding: 32px 16px 80px; }
+
+/* Header */
+.header { text-align: center; margin-bottom: 32px; }
+.header-brand {
+  display: inline-flex; align-items: center; gap: 8px;
+  padding: 5px 14px 5px 8px; background: var(--surface);
+  border: 1px solid var(--border-light); border-radius: 100px;
+  font-size: 11px; font-weight: 600; color: var(--text-dim);
+  margin-bottom: 14px; box-shadow: var(--shadow-sm);
+}
+.header-brand .dot { width: 7px; height: 7px; border-radius: 50%; background: var(--secondary); }
+.header h1 { font-size: 24px; font-weight: 900; letter-spacing: -0.8px; margin-bottom: 6px; }
+.header h1 span { color: var(--primary); }
+.header-sub { font-size: 13px; color: var(--text-dim); font-weight: 500; line-height: 1.6; }
+
+/* Steps indicator */
+.steps { display: flex; gap: 4px; justify-content: center; margin-bottom: 28px; }
+.step-dot {
+  width: 32px; height: 6px; border-radius: 3px;
+  background: var(--border); transition: all 0.3s;
+}
+.step-dot.active { background: var(--primary); width: 48px; }
+.step-dot.done { background: var(--secondary); }
+
+/* Card */
+.card {
+  background: var(--surface); border: 1px solid var(--border-light);
+  border-radius: 18px; padding: 24px; margin-bottom: 16px;
+  box-shadow: var(--shadow-md);
+}
+
+.card-title {
+  font-size: 15px; font-weight: 800; margin-bottom: 4px;
+  display: flex; align-items: center; gap: 8px;
+}
+.card-title .num {
+  width: 24px; height: 24px; border-radius: 8px;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 12px; font-weight: 900; color: white; background: var(--primary);
+  flex-shrink: 0;
+}
+.card-desc { font-size: 12px; color: var(--text-dim); margin-bottom: 16px; }
+
+/* Task grid */
+.task-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 8px; }
+@media (max-width: 480px) { .task-grid { grid-template-columns: 1fr; } }
+
+.task-btn {
+  padding: 14px 16px; border: 1.5px solid var(--border);
+  border-radius: var(--radius-sm); background: var(--surface);
+  font-family: inherit; font-size: 13px; font-weight: 600;
+  color: var(--text-mid); cursor: pointer; transition: all 0.2s;
+  text-align: left; display: flex; align-items: center; gap: 10px;
+}
+.task-btn:hover { border-color: var(--primary); background: var(--primary-soft); transform: translateY(-1px); }
+.task-btn.selected { border-color: var(--primary); background: var(--primary-soft); color: var(--primary); }
+.task-btn .icon { font-size: 20px; flex-shrink: 0; }
+.task-btn .label { line-height: 1.4; }
+.task-btn .label small { display: block; font-size: 10px; font-weight: 500; color: var(--text-dim); margin-top: 2px; }
+
+/* Form */
+.form-group { margin-bottom: 12px; }
+.form-group label {
+  display: block; font-size: 12px; font-weight: 700;
+  color: var(--text-mid); margin-bottom: 5px;
+}
+.form-group label .optional { font-weight: 500; color: var(--text-dim); }
+.form-group input, .form-group textarea, .form-group select {
+  width: 100%; padding: 10px 14px; border: 1.5px solid var(--border);
+  border-radius: 10px; font-family: inherit; font-size: 13px;
+  font-weight: 500; color: var(--text); background: var(--bg);
+  outline: none; transition: all 0.15s;
+}
+.form-group input:focus, .form-group textarea:focus, .form-group select:focus {
+  border-color: var(--primary); background: white;
+}
+.form-group textarea { resize: vertical; min-height: 80px; line-height: 1.6; }
+
+/* Chips */
+.chip-row { display: flex; gap: 6px; flex-wrap: wrap; }
+.chip {
+  padding: 6px 14px; border: 1.5px solid var(--border); border-radius: 100px;
+  font-family: inherit; font-size: 12px; font-weight: 600;
+  cursor: pointer; transition: all 0.15s; background: var(--surface); color: var(--text-mid);
+}
+.chip.selected { background: var(--secondary); border-color: var(--secondary); color: white; }
+.chip:hover:not(.selected) { border-color: var(--secondary); color: var(--secondary); }
+
+/* Result area */
+.result-area {
+  background: #1a1a24; border-radius: var(--radius);
+  overflow: hidden; margin-top: 16px;
+}
+.result-header {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 12px 16px; background: rgba(255,255,255,0.06);
+  border-bottom: 1px solid rgba(255,255,255,0.08);
+}
+.result-header h3 { font-size: 12px; font-weight: 700; color: rgba(255,255,255,0.6); }
+.result-actions { display: flex; gap: 6px; }
+.copy-btn {
+  padding: 5px 14px; border: 1px solid rgba(255,255,255,0.15); border-radius: 8px;
+  background: transparent; font-family: inherit; font-size: 11px;
+  font-weight: 600; color: rgba(255,255,255,0.7); cursor: pointer; transition: all 0.15s;
+}
+.copy-btn:hover { background: rgba(255,255,255,0.1); color: white; }
+.copy-btn.copied { background: var(--secondary); border-color: var(--secondary); color: white; }
+.result-body {
+  padding: 16px; font-size: 13px; line-height: 1.8; color: #c8c8d8;
+  white-space: pre-wrap; font-family: inherit; max-height: 500px;
+  overflow-y: auto; word-break: break-word;
+}
+
+/* Buttons */
+.btn-row { display: flex; gap: 8px; margin-top: 16px; }
+.btn {
+  flex: 1; padding: 13px 20px; border: none; border-radius: var(--radius-sm);
+  font-family: inherit; font-size: 14px; font-weight: 700;
+  cursor: pointer; transition: all 0.2s; text-align: center;
+}
+.btn-primary { background: var(--primary); color: white; box-shadow: 0 3px 16px var(--primary-glow); }
+.btn-primary:hover { transform: translateY(-1px); box-shadow: 0 6px 24px rgba(212,96,58,0.25); }
+.btn-secondary { background: var(--bg-warm); color: var(--text-mid); }
+.btn-secondary:hover { background: var(--border); }
+.btn-ghost {
+  background: transparent; color: var(--text-dim); border: 1.5px solid var(--border);
+  flex: 0; padding: 13px 20px;
+}
+.btn-ghost:hover { border-color: var(--text-dim); color: var(--text-mid); }
+
+/* Saved templates */
+.template-list { display: flex; flex-direction: column; gap: 6px; }
+.template-item {
+  display: flex; align-items: center; gap: 10px;
+  padding: 10px 14px; background: var(--bg);
+  border-radius: var(--radius-sm); cursor: pointer; transition: all 0.15s;
+}
+.template-item:hover { background: var(--primary-soft); }
+.template-item .t-name { flex: 1; font-size: 13px; font-weight: 600; }
+.template-item .t-cat { font-size: 10px; font-weight: 600; color: var(--text-dim); background: var(--bg-warm); padding: 2px 8px; border-radius: 6px; }
+.template-item .t-del {
+  width: 22px; height: 22px; border: none; background: transparent;
+  cursor: pointer; font-size: 12px; color: var(--text-dim); border-radius: 6px;
+  display: flex; align-items: center; justify-content: center; font-family: inherit;
+}
+.template-item .t-del:hover { background: rgba(221,68,68,0.1); color: #d44; }
+
+.empty-state {
+  text-align: center; padding: 24px; font-size: 13px; color: var(--text-dim);
+}
+
+/* Hide */
+.hidden { display: none !important; }
+
+/* Toggle */
+.toggle-row {
+  display: flex; align-items: center; gap: 10px; margin-bottom: 12px;
+}
+.toggle {
+  width: 44px; height: 24px; border-radius: 12px;
+  background: var(--border); cursor: pointer; position: relative;
+  transition: background 0.2s; border: none; padding: 0;
+}
+.toggle::after {
+  content: ''; position: absolute; top: 3px; left: 3px;
+  width: 18px; height: 18px; border-radius: 50%;
+  background: white; transition: transform 0.2s; box-shadow: var(--shadow-sm);
+}
+.toggle.on { background: var(--secondary); }
+.toggle.on::after { transform: translateX(20px); }
+.toggle-label { font-size: 12px; font-weight: 600; color: var(--text-mid); }
+</style>
+</head>
+<body>
+<div class="app">
+
+  <!-- Header -->
+  <div class="header">
+    <div class="header-brand"><div class="dot"></div>돌봄매트</div>
+    <h1>AI <span>프롬프트</span> 생성기</h1>
+    <div class="header-sub">작업 유형 선택 → 세부 내용 입력 → 최적화된 프롬프트 자동 생성<br>복사해서 Claude에 바로 붙여넣기!</div>
+  </div>
+
+  <!-- Steps -->
+  <div class="steps">
+    <div class="step-dot active" id="s1"></div>
+    <div class="step-dot" id="s2"></div>
+    <div class="step-dot" id="s3"></div>
+  </div>
+
+  <!-- STEP 1: Task Selection -->
+  <div id="step1">
+    <div class="card">
+      <div class="card-title"><div class="num">1</div> 어떤 작업을 할 건가요?</div>
+      <div class="card-desc">작업 유형을 선택하면 맞춤 입력 양식이 나타납니다</div>
+      <div class="task-grid" id="taskGrid"></div>
+    </div>
+  </div>
+
+  <!-- STEP 2: Details -->
+  <div id="step2" class="hidden">
+    <div class="card">
+      <div class="card-title"><div class="num">2</div> <span id="step2Title">세부 내용</span></div>
+      <div class="card-desc" id="step2Desc">구체적으로 입력할수록 정확한 결과가 나옵니다</div>
+      <div id="dynamicForm"></div>
+
+      <div class="toggle-row">
+        <button class="toggle on" id="contextToggle" onclick="this.classList.toggle('on')"></button>
+        <span class="toggle-label">회사 정보 자동 포함 (돌봄매트 배경 정보)</span>
+      </div>
+
+      <div class="toggle-row">
+        <button class="toggle" id="koreanToggle" onclick="this.classList.toggle('on')"></button>
+        <span class="toggle-label">한글로 답변 요청 추가</span>
+      </div>
+
+      <div class="btn-row">
+        <button class="btn btn-ghost" onclick="goStep(1)">← 뒤로</button>
+        <button class="btn btn-primary" onclick="generate()">프롬프트 생성하기</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- STEP 3: Result -->
+  <div id="step3" class="hidden">
+    <div class="card" style="padding:0; overflow:hidden;">
+      <div class="result-area">
+        <div class="result-header">
+          <h3>생성된 프롬프트</h3>
+          <div class="result-actions">
+            <button class="copy-btn" onclick="copyResult()">📋 복사하기</button>
+          </div>
+        </div>
+        <div class="result-body" id="resultBody"></div>
+      </div>
+    </div>
+    <div class="btn-row">
+      <button class="btn btn-ghost" onclick="goStep(2)">← 수정하기</button>
+      <button class="btn btn-secondary" onclick="saveTemplate()">💾 저장</button>
+      <button class="btn btn-primary" onclick="goStep(1)">새 프롬프트</button>
+    </div>
+  </div>
+
+  <!-- Saved Templates -->
+  <div class="card" style="margin-top: 24px;">
+    <div class="card-title" style="margin-bottom:12px">💾 저장된 템플릿</div>
+    <div id="templateList"></div>
+  </div>
+
+</div>
+
+<script>
+// ─── COMPANY CONTEXT ───
+var CONTEXT = `[역할 부여] 당신은 층간소음 시공매트 전문 기업 '돌봄매트'의 최고 전략 책임자(CSO)이자 마케팅 전문가입니다.
+
+[회사 정보: 돌봄매트]
+- 산업: 영유아 및 반려동물 가구를 위한 층간소음 시공매트 전문 기업
+- 주력 제품: 500x500mm (장당 13,950원, 34평 기준 215만원), 1000x1000mm 신제품 출시 예정
+- 핵심 강점:
+  1. 바닥 공기순환 통로 (곰팡이/습기 완벽 방지)
+  2. A/S 혁신 (오염 시 장당 13,950원에 1장만 교체 가능)
+  3. 본사 직영 시공팀 (외주 아님, 품질 및 현장 대응 우수)
+  4. 온누리상품권 결제 가능 (체감 10% 추가 할인)
+  5. 무료 샘플 박스 (배송비 포함 완전 무료)
+  6. KCL, CE 인증 보유
+- 경쟁 상황: 경쟁사(쿠키매트, 블루돌핀, 까사플로아, 자람매트 등)가 600~1200mm 대형 사이즈로 시장 장악 중
+- 목표: 월 140건(약 2만장) 계약 달성
+- 마케팅: 맘카페 + 인스타그램 오가닉 중심, 유료 광고 최소화
+
+위 맥락을 바탕으로 아래 요청에 답변해 주세요.`;
+
+// ─── TASK DEFINITIONS ───
+var TASKS = [
+  {
+    id: 'marketing_copy',
+    icon: '📝',
+    name: '마케팅 카피',
+    desc: '상세페이지, SNS, 맘카페 글',
+    fields: [
+      { id: 'platform', label: '게시 채널', type: 'chips', options: ['인스타그램','맘카페','블로그','상세페이지','카카오톡','기타'] },
+      { id: 'target', label: '타겟 고객', type: 'chips', options: ['영유아 부모','임산부','반려동물 가정','신혼부부','이사 예정자'] },
+      { id: 'topic', label: '주제/강조 포인트', type: 'text', placeholder: '예: 곰팡이 걱정 없는 공기순환 매트' },
+      { id: 'tone', label: '톤 & 분위기', type: 'chips', options: ['친근한','전문적인','감성적인','유머러스한','긴급한'] },
+      { id: 'extra', label: '추가 요청사항', type: 'textarea', placeholder: '예: 해시태그 포함, 300자 이내로' }
+    ]
+  },
+  {
+    id: 'sales_script',
+    icon: '💬',
+    name: '영업 스크립트',
+    desc: '카톡 상담, 현장 영업 멘트',
+    fields: [
+      { id: 'situation', label: '상황', type: 'chips', options: ['첫 문의 응대','견적 안내','경쟁사 비교 질문','가격 협상','A/S 문의','예약 확정'] },
+      { id: 'concern', label: '고객의 주요 고민', type: 'text', placeholder: '예: 다른 업체보다 사이즈가 작아 보여서 걱정' },
+      { id: 'goal', label: '달성 목표', type: 'chips', options: ['샘플 신청 유도','예약금 결제','리뷰 작성 유도','추천인 등록','재시공 계약'] },
+      { id: 'extra', label: '추가 요청사항', type: 'textarea', placeholder: '예: 자연스러운 톤으로, 너무 영업 느낌 나지 않게' }
+    ]
+  },
+  {
+    id: 'strategy',
+    icon: '📊',
+    name: '전략/분석',
+    desc: '시장 분석, 경쟁사 비교, 사업 전략',
+    fields: [
+      { id: 'type', label: '분석 유형', type: 'chips', options: ['시장 트렌드','경쟁사 분석','SWOT 분석','가격 전략','채널 전략','고객 분석'] },
+      { id: 'question', label: '핵심 질문', type: 'textarea', placeholder: '예: 1m 신제품 출시 시 경쟁사 대비 어떤 포지셔닝이 유리한가?' },
+      { id: 'data', label: '참고할 데이터/상황', type: 'textarea', placeholder: '예: 경쟁사 A는 600mm에 290만원, 경쟁사 B는 800mm에 330만원' },
+      { id: 'output', label: '원하는 결과물 형태', type: 'chips', options: ['표/비교표','보고서','액션 플랜','프레젠테이션','1페이지 요약'] }
+    ]
+  },
+  {
+    id: 'coding',
+    icon: '💻',
+    name: '코딩/개발',
+    desc: '웹사이트, 도구, 자동화',
+    fields: [
+      { id: 'type', label: '개발 유형', type: 'chips', options: ['웹페이지','업무 도구','자동화 스크립트','데이터 분석','엑셀 연동','기타'] },
+      { id: 'description', label: '만들고 싶은 것', type: 'textarea', placeholder: '예: 고객이 평수를 입력하면 자동으로 견적이 나오는 계산기' },
+      { id: 'features', label: '필요한 기능', type: 'textarea', placeholder: '예: 평수 입력, 색상 선택, 경쟁사 가격 비교, 모바일 지원' },
+      { id: 'hosting', label: '배포 방식', type: 'chips', options: ['GitHub Pages','로컬 HTML','구글시트 연동','카카오톡 연동'] },
+      { id: 'extra', label: '디자인/기타 요청', type: 'textarea', placeholder: '예: 돌봄매트 브랜드 색상 사용, 따뜻한 느낌' }
+    ]
+  },
+  {
+    id: 'content',
+    icon: '🎬',
+    name: '콘텐츠 기획',
+    desc: '릴스, 블로그, 리뷰 가이드',
+    fields: [
+      { id: 'format', label: '콘텐츠 형식', type: 'chips', options: ['인스타 릴스','블로그 포스트','유튜브 쇼츠','맘카페 후기 가이드','카드뉴스'] },
+      { id: 'topic', label: '주제', type: 'text', placeholder: '예: 시공 전후 비교 영상 시나리오' },
+      { id: 'target', label: '타겟', type: 'chips', options: ['영유아 부모','반려동물 가정','인테리어 관심','신혼부부'] },
+      { id: 'hook', label: '핵심 메시지/훅', type: 'text', placeholder: '예: 매트 밑 곰팡이, 우리 집은 왜 없을까?' },
+      { id: 'extra', label: '추가 요청', type: 'textarea', placeholder: '예: 촬영 각도 추천까지 포함해서' }
+    ]
+  },
+  {
+    id: 'customer_response',
+    icon: '🛡️',
+    name: '고객 응대',
+    desc: '불만 처리, FAQ, 리뷰 대응',
+    fields: [
+      { id: 'type', label: '상황 유형', type: 'chips', options: ['불만/컴플레인','A/S 요청','부정 리뷰 대응','FAQ 작성','감사 메시지'] },
+      { id: 'situation', label: '구체적 상황', type: 'textarea', placeholder: '예: 시공 3개월 후 매트 틈새에 오염이 생겼다고 불만' },
+      { id: 'tone', label: '응대 톤', type: 'chips', options: ['정중하고 공감','빠르고 실용적','따뜻하고 친근','전문적이고 신뢰'] },
+      { id: 'goal', label: '원하는 결과', type: 'text', placeholder: '예: 고객 불만 해소 + A/S 교체 안내 + 재구매 유도' }
+    ]
+  },
+  {
+    id: 'document',
+    icon: '📄',
+    name: '문서/보고서',
+    desc: '제안서, 견적서, 업무 문서',
+    fields: [
+      { id: 'doctype', label: '문서 유형', type: 'chips', options: ['제안서','견적서','사업 계획서','회의록 정리','업무 매뉴얼','이메일'] },
+      { id: 'purpose', label: '목적', type: 'text', placeholder: '예: 아파트 단지 관리소에 보낼 시공 제안서' },
+      { id: 'audience', label: '받는 사람', type: 'text', placeholder: '예: 아파트 관리소장' },
+      { id: 'keypoints', label: '꼭 포함할 내용', type: 'textarea', placeholder: '예: 시공 사례, 가격, 주민 할인, 일정' },
+      { id: 'format', label: '포맷', type: 'chips', options: ['워드 문서','엑셀','PDF','HTML','파워포인트'] }
+    ]
+  },
+  {
+    id: 'custom',
+    icon: '✨',
+    name: '자유 입력',
+    desc: '직접 프롬프트 작성',
+    fields: [
+      { id: 'role', label: '역할 지정', type: 'text', placeholder: '예: 10년차 마케팅 전문가' },
+      { id: 'task', label: '요청 내용', type: 'textarea', placeholder: '하고 싶은 작업을 자유롭게 적어주세요' },
+      { id: 'output', label: '원하는 결과물', type: 'text', placeholder: '예: 표 형태로 정리, 500자 이내' },
+      { id: 'extra', label: '추가 조건', type: 'textarea', placeholder: '예: 쉬운 말로, 실행 가능한 것 위주로' }
+    ]
+  }
+];
+
+// ─── STATE ───
+var currentTask = null;
+var currentStep = 1;
+
+// ─── INIT ───
+function init() {
+  renderTasks();
+  renderTemplates();
+}
+
+function renderTasks() {
+  var grid = document.getElementById('taskGrid');
+  grid.innerHTML = '';
+  TASKS.forEach(function(t) {
+    var btn = document.createElement('button');
+    btn.className = 'task-btn';
+    btn.innerHTML = '<span class="icon">' + t.icon + '</span><div class="label">' + t.name + '<small>' + t.desc + '</small></div>';
+    btn.onclick = function() { selectTask(t.id); };
+    grid.appendChild(btn);
+  });
+}
+
+function selectTask(id) {
+  currentTask = TASKS.find(function(t) { return t.id === id; });
+  document.querySelectorAll('.task-btn').forEach(function(b, i) {
+    b.classList.toggle('selected', TASKS[i].id === id);
+  });
+  renderForm();
+  goStep(2);
+}
+
+function renderForm() {
+  if (!currentTask) return;
+  document.getElementById('step2Title').textContent = currentTask.icon + ' ' + currentTask.name;
+  document.getElementById('step2Desc').textContent = currentTask.desc + ' — 구체적으로 입력할수록 좋습니다';
+
+  var form = document.getElementById('dynamicForm');
+  form.innerHTML = '';
+
+  currentTask.fields.forEach(function(f) {
+    var div = document.createElement('div');
+    div.className = 'form-group';
+
+    var label = document.createElement('label');
+    label.textContent = f.label;
+    if (f.id === 'extra') label.innerHTML = f.label + ' <span class="optional">(선택)</span>';
+    div.appendChild(label);
+
+    if (f.type === 'text') {
+      var input = document.createElement('input');
+      input.id = 'field_' + f.id;
+      input.placeholder = f.placeholder || '';
+      div.appendChild(input);
+    } else if (f.type === 'textarea') {
+      var ta = document.createElement('textarea');
+      ta.id = 'field_' + f.id;
+      ta.placeholder = f.placeholder || '';
+      div.appendChild(ta);
+    } else if (f.type === 'chips') {
+      var row = document.createElement('div');
+      row.className = 'chip-row';
+      row.id = 'field_' + f.id;
+      f.options.forEach(function(opt) {
+        var chip = document.createElement('button');
+        chip.className = 'chip';
+        chip.textContent = opt;
+        chip.type = 'button';
+        chip.onclick = function() {
+          if (f.id === 'platform' || f.id === 'target' || f.id === 'type' || f.id === 'format' || f.id === 'tone' || f.id === 'situation' || f.id === 'goal' || f.id === 'output' || f.id === 'doctype' || f.id === 'hosting') {
+            // Allow multiple for some
+            this.classList.toggle('selected');
+          } else {
+            row.querySelectorAll('.chip').forEach(function(c) { c.classList.remove('selected'); });
+            this.classList.add('selected');
+          }
+        };
+        row.appendChild(chip);
+      });
+      div.appendChild(row);
+    }
+
+    form.appendChild(div);
+  });
+}
+
+// ─── GENERATE ───
+function generate() {
+  if (!currentTask) return;
+
+  var values = {};
+  currentTask.fields.forEach(function(f) {
+    if (f.type === 'chips') {
+      var selected = [];
+      document.querySelectorAll('#field_' + f.id + ' .chip.selected').forEach(function(c) {
+        selected.push(c.textContent);
+      });
+      values[f.id] = selected.join(', ');
+    } else {
+      var el = document.getElementById('field_' + f.id);
+      values[f.id] = el ? el.value : '';
+    }
+  });
+
+  var includeContext = document.getElementById('contextToggle').classList.contains('on');
+  var includeKorean = document.getElementById('koreanToggle').classList.contains('on');
+
+  var prompt = '';
+
+  // Add company context
+  if (includeContext) {
+    prompt += CONTEXT + '\n\n';
+  }
+
+  prompt += '---\n\n';
+
+  // Build task-specific prompt
+  switch(currentTask.id) {
+    case 'marketing_copy':
+      prompt += '[요청] 마케팅 카피를 작성해 주세요.\n\n';
+      if (values.platform) prompt += '- 게시 채널: ' + values.platform + '\n';
+      if (values.target) prompt += '- 타겟 고객: ' + values.target + '\n';
+      if (values.topic) prompt += '- 주제/강조 포인트: ' + values.topic + '\n';
+      if (values.tone) prompt += '- 톤 & 분위기: ' + values.tone + '\n';
+      if (values.extra) prompt += '\n[추가 요청]\n' + values.extra + '\n';
+      break;
+
+    case 'sales_script':
+      prompt += '[요청] 영업/상담 스크립트를 작성해 주세요.\n\n';
+      if (values.situation) prompt += '- 상황: ' + values.situation + '\n';
+      if (values.concern) prompt += '- 고객의 주요 고민: ' + values.concern + '\n';
+      if (values.goal) prompt += '- 달성 목표: ' + values.goal + '\n';
+      prompt += '\n자연스러운 대화체로, 고객이 부담 느끼지 않도록 작성해 주세요.\n';
+      if (values.extra) prompt += '\n[추가 요청]\n' + values.extra + '\n';
+      break;
+
+    case 'strategy':
+      prompt += '[요청] 전략 분석을 해 주세요.\n\n';
+      if (values.type) prompt += '- 분석 유형: ' + values.type + '\n';
+      if (values.question) prompt += '- 핵심 질문: ' + values.question + '\n';
+      if (values.data) prompt += '- 참고 데이터/상황:\n' + values.data + '\n';
+      if (values.output) prompt += '- 원하는 결과물 형태: ' + values.output + '\n';
+      prompt += '\n현실적이고 당장 실행 가능한 방안 위주로 답변해 주세요.\n';
+      break;
+
+    case 'coding':
+      prompt += '[요청] 아래 도구/기능을 개발해 주세요.\n\n';
+      if (values.type) prompt += '- 개발 유형: ' + values.type + '\n';
+      if (values.description) prompt += '- 설명: ' + values.description + '\n';
+      if (values.features) prompt += '- 필요 기능:\n' + values.features + '\n';
+      if (values.hosting) prompt += '- 배포 방식: ' + values.hosting + '\n';
+      if (values.extra) prompt += '- 디자인/기타: ' + values.extra + '\n';
+      prompt += '\n단일 HTML 파일로 만들어 주세요. 모바일에서도 사용 가능하게 반응형으로 해 주세요.\n';
+      break;
+
+    case 'content':
+      prompt += '[요청] 콘텐츠를 기획해 주세요.\n\n';
+      if (values.format) prompt += '- 콘텐츠 형식: ' + values.format + '\n';
+      if (values.topic) prompt += '- 주제: ' + values.topic + '\n';
+      if (values.target) prompt += '- 타겟: ' + values.target + '\n';
+      if (values.hook) prompt += '- 핵심 메시지/훅: ' + values.hook + '\n';
+      if (values.extra) prompt += '\n[추가 요청]\n' + values.extra + '\n';
+      break;
+
+    case 'customer_response':
+      prompt += '[요청] 고객 응대 문구를 작성해 주세요.\n\n';
+      if (values.type) prompt += '- 상황 유형: ' + values.type + '\n';
+      if (values.situation) prompt += '- 구체적 상황: ' + values.situation + '\n';
+      if (values.tone) prompt += '- 응대 톤: ' + values.tone + '\n';
+      if (values.goal) prompt += '- 원하는 결과: ' + values.goal + '\n';
+      prompt += '\n고객 감정에 공감하면서도 해결책을 명확히 제시하는 방향으로 작성해 주세요.\n';
+      break;
+
+    case 'document':
+      prompt += '[요청] 문서를 작성해 주세요.\n\n';
+      if (values.doctype) prompt += '- 문서 유형: ' + values.doctype + '\n';
+      if (values.purpose) prompt += '- 목적: ' + values.purpose + '\n';
+      if (values.audience) prompt += '- 받는 사람: ' + values.audience + '\n';
+      if (values.keypoints) prompt += '- 꼭 포함할 내용:\n' + values.keypoints + '\n';
+      if (values.format) prompt += '- 파일 포맷: ' + values.format + '\n';
+      break;
+
+    case 'custom':
+      if (values.role) prompt += '[역할] ' + values.role + '\n\n';
+      if (values.task) prompt += '[요청]\n' + values.task + '\n\n';
+      if (values.output) prompt += '[결과물 형태] ' + values.output + '\n';
+      if (values.extra) prompt += '\n[추가 조건]\n' + values.extra + '\n';
+      break;
+  }
+
+  if (includeKorean) {
+    prompt += '\n한글로 답변해 주세요.';
+  }
+
+  document.getElementById('resultBody').textContent = prompt.trim();
+  goStep(3);
+}
+
+// ─── STEPS ───
+function goStep(n) {
+  currentStep = n;
+  document.getElementById('step1').classList.toggle('hidden', n !== 1);
+  document.getElementById('step2').classList.toggle('hidden', n !== 2);
+  document.getElementById('step3').classList.toggle('hidden', n !== 3);
+
+  document.getElementById('s1').className = 'step-dot ' + (n === 1 ? 'active' : n > 1 ? 'done' : '');
+  document.getElementById('s2').className = 'step-dot ' + (n === 2 ? 'active' : n > 2 ? 'done' : '');
+  document.getElementById('s3').className = 'step-dot ' + (n === 3 ? 'active' : '');
+
+  window.scrollTo({ top: 0, behavior: 'smooth' });
+}
+
+// ─── COPY ───
+function copyResult() {
+  var text = document.getElementById('resultBody').textContent;
+  navigator.clipboard.writeText(text).then(function() {
+    var btns = document.querySelectorAll('.copy-btn');
+    btns.forEach(function(b) { b.textContent = '✓ 복사됨!'; b.classList.add('copied'); });
+    setTimeout(function() {
+      btns.forEach(function(b) { b.textContent = '📋 복사하기'; b.classList.remove('copied'); });
+    }, 2000);
+  });
+}
+
+// ─── TEMPLATES ───
+function saveTemplate() {
+  var name = prompt('템플릿 이름을 입력하세요:');
+  if (!name) return;
+
+  var templates = loadTemplates();
+  templates.push({
+    name: name,
+    category: currentTask ? currentTask.name : '자유',
+    prompt: document.getElementById('resultBody').textContent,
+    created: Date.now()
+  });
+  localStorage.setItem('dolbom_templates', JSON.stringify(templates));
+  renderTemplates();
+  alert('저장되었습니다!');
+}
+
+function loadTemplates() {
+  try { return JSON.parse(localStorage.getItem('dolbom_templates')) || []; }
+  catch(e) { return []; }
+}
+
+function renderTemplates() {
+  var list = document.getElementById('templateList');
+  var templates = loadTemplates();
+
+  if (templates.length === 0) {
+    list.innerHTML = '<div class="empty-state">저장된 템플릿이 없습니다.<br>프롬프트 생성 후 "저장" 버튼을 눌러보세요!</div>';
+    return;
+  }
+
+  list.innerHTML = '';
+  templates.forEach(function(t, i) {
+    var item = document.createElement('div');
+    item.className = 'template-item';
+    item.innerHTML = '<span class="t-cat">' + t.category + '</span><span class="t-name">' + t.name + '</span><button class="t-del" onclick="event.stopPropagation();deleteTemplate(' + i + ')">✕</button>';
+    item.onclick = function() { loadTemplate(i); };
+    list.appendChild(item);
+  });
+}
+
+function loadTemplate(idx) {
+  var templates = loadTemplates();
+  var t = templates[idx];
+  if (!t) return;
+  document.getElementById('resultBody').textContent = t.prompt;
+  goStep(3);
+}
+
+function deleteTemplate(idx) {
+  if (!confirm('삭제하시겠습니까?')) return;
+  var templates = loadTemplates();
+  templates.splice(idx, 1);
+  localStorage.setItem('dolbom_templates', JSON.stringify(templates));
+  renderTemplates();
+}
+
+init();
+</script>
+</body>
+</html>
